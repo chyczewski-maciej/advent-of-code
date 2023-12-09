@@ -66,8 +66,9 @@ fn part2(data: &str) {
                     for s in [&i.to_string(), digits[i]] {
                         match line.find(s) {
                             Some(index) => {
-                                if (index as i32) < min_index {
-                                    min_index = index as i32;
+                                let index = index as i32;
+                                if index < min_index {
+                                    min_index = index ;
                                     min_digit = i as i32;
                                 }
                             }
@@ -76,8 +77,9 @@ fn part2(data: &str) {
 
                         match line.rfind(s) {
                             Some(index) => {
+                                let index = index as i32;
                                 if (index as i32) > max_index{
-                                    max_index = index as i32;
+                                    max_index = index;
                                     max_digit = i as i32;
                                 }
                             }
@@ -87,7 +89,6 @@ fn part2(data: &str) {
                 }
                 
                 let number = min_digit * 10 + max_digit;
-                println!("Line: {}. Number: {}", line, number);
 
                 number
             })
