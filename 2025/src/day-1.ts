@@ -1,5 +1,4 @@
 import * as fs from 'fs';
-import { emitWarning } from 'process';
 
 const input = fs.readFileSync('./src/day-1.input', 'utf8');
 const partOneAnswer =

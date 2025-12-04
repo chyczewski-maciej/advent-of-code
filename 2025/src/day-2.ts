@@ -1,39 +1,48 @@
 import * as fs from 'fs';
 
+function isRepeated(x: number, times: number) {
+  const str = x.toString();
+  if (str.length % times != 0)
+    return false;
+
+  const sub_length = str.length / times;
+  const sub = str.substring(0, sub_length);
+
+  const repeated = sub.repeat(str.length / sub_length);
+
+  return str == repeated;
+}
+
 const input = fs.readFileSync('./src/day-2.input', 'utf8');
-const partOneAnswer =
-  input
-    .split('\n')
-    .map(l => l.replace('L', '-').replace('R', ''))
-    .filter(l => !!l.trim())
-    .map(l => parseInt(l))
-    .reduce((acc, n) => {
-      const newPosition = (((acc.dialPosition + n) % 100) + 100) % 100;
-      return { dialPosition: newPosition, count: newPosition == 0 ? acc.count + 1 : acc.count };
-    }, { dialPosition: 50, count: 0 });
+const ranges = input.split(',').map(l => [Number(l.split('-')[0]), Number(l.split('-')[1])]) as [number, number][];
 
-console.log(`Part one: ${partOneAnswer.count}`);
-
-const partTwoAnswer = input
-  .split('\n')
-  .map(l => l.replace('L', '-').replace('R', ''))
-  .filter(l => !!l.trim())
-  .map(l => parseInt(l))
-  .reduce((acc, n) => {
-    let newPosition = acc.dialPosition;
-    let count = 0;
-
-    while (n != 0) {
-      let change = n / Math.abs(n);
-      n -= change;
-      newPosition += change;
-      newPosition = newPosition % 100;
-
-      if (newPosition == 0)
-        count++;
+{
+  let repeatingNumbers = new Set<number>();
+  for (const [from, to] of ranges) {
+    for (let i: number = from; i <= to; i++) {
+      if (isRepeated(i, 2)) {
+        console.log(`${i}`)
+        repeatingNumbers.add(i);
+      }
     }
+  }
 
-    return { dialPosition: newPosition, count: acc.count + count };
-  }, { dialPosition: 50, count: 0 })
+  const sum = [...repeatingNumbers].reduce((acc, x) => acc + x, 0);
+  console.log(`Part 1: ${sum}`)
+}
 
-console.log(`Part two: ${partTwoAnswer.count}`);
+{
+  let repeatingNumbers = new Set<number>();
+  for (const [from, to] of ranges) {
+    for (let i: number = from; i <= to; i++) {
+      for(let b: number = 2; b <= i.toString().length; b++){
+        if (isRepeated(i, b)) {
+          repeatingNumbers.add(i);
+        }
+      }
+    }
+  }
+
+  const sum = [...repeatingNumbers].reduce((acc, x) => acc + x, 0);
+  console.log(`Part 2: ${sum}`)
+}
