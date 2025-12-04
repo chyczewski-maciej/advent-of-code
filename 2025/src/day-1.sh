@@ -23,11 +23,11 @@ dial_position=50
 count=0
 while IFS= read -r line; do
   move=$(echo "$line" | sed -e 's/L/-/i' -e 's/R//i')
+  dial_position=$(($dial_position + $move))
 
   while [ $move -ne 0 ]; do
-    moveAbs=${move#-}
-    change=$((move / moveAbs))
-    move=$((move - change))
+    moveAbs=${s3#-}
+    change=$(($move / $moveAbs))
     dial_position=$(((100 + ($dial_position + $change)) % 100))
 
     if [ $dial_position -eq 0 ];
