@@ -47,12 +47,10 @@ function repeat(){
 export -f repeat
 
 numbers() {
-  while IFS=',' read -ra ADDR; do
-    for i in "${ADDR[@]}"; do
-      from="${i%-*}"
-      to="${i#*-}"
-      seq "$from" "$to"
-    done
+  while read -r i; do
+    from="${i%-*}"
+    to="${i#*-}"
+    seq "$from" "$to"
   done
 }
 
@@ -103,18 +101,21 @@ filter_numbers() {
 export -f filter_numbers
 
 echo "This takes a while, be patient. Idk if this is even correct"
-echo "Part 2:"
 cat ./day-2.input | 
+  tr ',' '\n' |
   numbers |
-  filter_numbers |
-  parallel --pipe --block 5K filter_numbers |
-  sort -n |
-  uniq   |
+  sort -n  |
+  uniq  > day-2.numbers
+
+cat ./day-2.numbers | 
+  parallel --pipe --block 5K --bt 1 filter_numbers > day-2.filter_numbers
+
+cat ./day-2.filter_numbers |
+  sort -n  |
+  uniq |
   awk '{ sum += $1 } END { print sum }'
 
-# Answers:
-# 55287825268 too high
-# 27469414355 too low
-# 27469417443 too high
-
 echo "Part 2: $count"
+
+rm ./day-2.numbers
+rm ./day-2.filter_numbers
