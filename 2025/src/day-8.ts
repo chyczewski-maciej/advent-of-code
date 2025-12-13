@@ -1,8 +1,6 @@
-import { privateEncrypt } from 'crypto';
 import * as fs from 'fs';
 
 type Position = [number, number, number];
-
 
 const input = fs.readFileSync('./src/day-8.input', 'utf8');
 const positions = input
