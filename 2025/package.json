@@ -4,7 +4,8 @@
   "main": "./dist/src/index.js",
   "type": "module",
   "scripts": {
-    "dev": "mkdir -p dist && cp src/*.input dist && tsc-watch --onSuccess \"node ./dist/src/day-9.js\"",
+    "dev": "mkdir -p dist && cp src/*.input dist && tsc-watch --onSuccess \"node ./dist/src/day-10.js\"",
+    "dev-win": "tsc-watch --onSuccess \"node --max-old-space-size=32000 ./dist/src/day-10.js\"",
     "build": "tsc",
     "copy-files": "copyfiles -u 1 **/*.{input} dist/",
     "type-check": "tsc --noEmit",
