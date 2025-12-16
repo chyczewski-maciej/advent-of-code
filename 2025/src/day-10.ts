@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import { Worker, isMainThread, parentPort, workerData } from "worker_threads";
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Deserializer } from 'node:v8';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -166,18 +167,20 @@ async function part2() {
   // Dictionary that holds the map between state (joltages) and shortest path (buttons that needed to be pressed)
   // State is represented as coma separeted numbers
   let dict: { [id: string]: number } = {};
-  let queue: string[] = [];
-  function calc_min_button_clicks(c: Configuration, state: number[]): number | undefined {
+  let queue: string[][] = [];
+  function calc_min_button_clicks(c: Configuration): number | undefined {
+    let state = c.joltage.map(() => 0);
     if (state.every(s => s == 0)) {
       //console.log(`Calculating: ${print_configuration(c)}`);
       dict = {};
       dict[state_to_key(state)] = 0;
-      queue = [state_to_key(state)];
+      queue = [[state_to_key(state)]];
     }
+
     let desired_state_key = state_to_key(c.joltage);
 
-    while (queue.length > 0) {
-      let state_key = queue.pop()!;
+    while (queue_length() > 0) {
+      let state_key = queue_pop()!;
       let state = state_key_to_state(state_key);
       let state_count = dict[state_key]!;
 
@@ -192,19 +195,69 @@ async function part2() {
 
         if (new_state_count == undefined || new_state_count > state_count + 1) {
           dict[new_state_key] = state_count + 1;
-          //console.log(`desired: ${desired_state_key}, current: ${new_state_key}, count: ${state_count + 1}`);
+          console.log(`desired: ${desired_state_key}, current: ${new_state_key}, count: ${state_count + 1}`);
 
-          //if (new_state_key == desired_state_key)
-          //console.log(`Found: ${state_count + 1}`);
+          if (new_state_key == desired_state_key)
+            console.log(`Found: ${state_count + 1}`);
 
-          if (!queue.includes(new_state_key))
-            queue.push(new_state_key);
+          let desired_state_count = dict[desired_state_key];
+          if (desired_state_count != undefined && calc_min_distance(new_state, c.joltage) > desired_state_count)
+            continue;
 
+          if (!queue_includes(new_state_key))
+            queue_push(state_count + 1, new_state_key, new_state);
         }
       }
     }
 
     return dict[desired_state_key];
+
+    function queue_length() {
+      let count = 0;
+      for (const q of queue)
+        count += q?.length || 0;
+
+      return count;
+    }
+
+    function queue_pop() {
+      for(const q of queue)
+      //for (let i = queue.length; i >= 0; i--) {
+        //let q = queue[i];
+        if (q && q.length > 0)
+          return q.pop();
+      //}
+    }
+
+    function queue_push(count: number, state_key: string, new_state: number[]) {
+      let distance = calc_total_distance(new_state, c.joltage);
+      queue[distance] ??= [];
+      queue[distance].push(state_key);
+    }
+
+    function queue_includes(state_key: string) {
+      for (const q of queue)
+        if (q != undefined && q.includes(state_key))
+          return true;
+    }
+  }
+
+  function calc_total_distance(current_state: number[], desired_state: number[]) {
+    let total = 0;
+
+    for (let i in current_state)
+      total += Math.abs(desired_state[i]! - current_state[i]!);
+
+    return total;
+  }
+
+  function calc_min_distance(current_state: number[], desired_state: number[]) {
+    let min = desired_state[0]!;
+
+    for (let i in current_state)
+      min = Math.min(min, Math.abs(desired_state[i]! - current_state[i]!));
+
+    return min;
   }
 
   function state_to_key(state: number[]): string {
@@ -260,41 +313,59 @@ async function part2() {
     return new Promise((resolve, reject) => setTimeout(() => resolve(null), ms));
   }
 
+  const use_workers = false;
   const input = fs.readFileSync('./src/day-10.input', 'utf8');
   const manual = input
     .split('\n')
     .filter(l => l)
     .map(parse_manual);
 
-  if (isMainThread) {
-    const worker_threads = 14;
+  if (!use_workers) {
     let total_count = 0;
-    let queue = [...manual];
-    let workers = new Set<Promise<number>>();
-    let index = 0;
-    while (queue.length > 0 || workers.size > 0) {
-      while (workers.size > worker_threads)
-        await sleep(1000);
-
-      if (queue.length > 0) {
-        let configuration = queue.pop()!;
-        console.log(`Starting processing: ${++index}/${manual.length}`);
-        (async () => {
-          let promise = calculate_in_worker_async(configuration);
-          workers.add(promise);
-
-          let count = await promise;
-          total_count += count;
-          console.log(`${print_configuration(configuration)} = ${count}`);
-          workers.delete(promise);
-        })();
-      }
+    for (const configuration of manual) {
+      let start = Date.now();
+      let count = calc_min_button_clicks(configuration);
+      let time = (Date.now() - start) / 1000;
+      console.log(`${print_configuration(configuration)} = ${count}          took ${time}s`);
     }
-
     console.log(`Part 2: ${total_count}`);
-  } else {
-    let count = calc_min_button_clicks(workerData.configuration, workerData.configuration.joltage.map((j: number) => 0));
-    parentPort!.postMessage(count);
+  }
+
+  else {
+    if (isMainThread) {
+      const worker_threads = 6;
+      let total_count = 0;
+      let queue = [...manual];
+      let workers = new Set<Promise<number>>();
+      let index = 0;
+      while (queue.length > 0 || workers.size > 0) {
+        await sleep(1000);
+        if (workers.size > worker_threads)
+          continue;
+
+        if (queue.length > 0) {
+          let configuration = queue.pop()!;
+          console.log(`Starting processing: ${++index}/${manual.length}`);
+          (async () => {
+            let promise = calculate_in_worker_async(configuration);
+            workers.add(promise);
+
+            let start = Date.now();
+
+            let count = await promise;
+            let time = (Date.now() - start) / 1000;
+            total_count += count;
+            console.log(`${print_configuration(configuration)} = ${count}          took ${time}s`);
+            workers.delete(promise);
+          })();
+        }
+      }
+
+      console.log(`Part 2: ${total_count}`);
+    } else {
+      let count = calc_min_button_clicks(workerData.configuration);
+      parentPort!.postMessage(count);
+    }
   }
 }
 
