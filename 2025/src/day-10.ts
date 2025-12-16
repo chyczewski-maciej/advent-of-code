@@ -60,10 +60,10 @@ function part1() {
   }
 
   let min: number | undefined;
-  // Can this be solved with dijkstra algorithm?
   function calc_min_button_clicks(c: Configuration, path: number[] = [0]): number | undefined {
     if (path.length == 1)
       min = undefined;
+
     return calc();
 
     function calc() {
@@ -164,82 +164,57 @@ async function part2() {
     return `[${indicator}] ${buttons} {${joltage}}`;
   }
 
-  // Dictionary that holds the map between state (joltages) and shortest path (buttons that needed to be pressed)
-  // State is represented as coma separeted numbers
-  let dict: { [id: string]: number } = {};
-  let queue: string[][] = [];
-  function calc_min_button_clicks(c: Configuration): number | undefined {
-    let state = c.joltage.map(() => 0);
-    if (state.every(s => s == 0)) {
-      //console.log(`Calculating: ${print_configuration(c)}`);
-      dict = {};
-      dict[state_to_key(state)] = 0;
-      queue = [[state_to_key(state)]];
-    }
+  async function calc_min_button_clicks(c: Configuration): Promise<number | undefined> {
+    const initial_state = c.joltage.map(() => 0);
 
-    let desired_state_key = state_to_key(c.joltage);
+    const desired_state = c.joltage;
+    return await calc_min(desired_state, initial_state, 0);
 
-    while (queue_length() > 0) {
-      let state_key = queue_pop()!;
-      let state = state_key_to_state(state_key);
-      let state_count = dict[state_key]!;
+    async function calc_min(desired_state: number[], state: number[], button_index: number): Promise<number | undefined> {
+      if (button_index == c.buttons.length) {
+        return 0;
+      }
 
-      for (const button of c.buttons) {
-        let new_state = press_button(state, button);
-
-        if (pair_wise_any_greater_than(new_state, c.joltage))
+      let maxpresses = max_presses(c.buttons[button_index]!, desired_state);
+      let button = c.buttons[button_index]!;
+      for (let i = maxpresses; i >= 0; i--) {
+        let new_state = press_button_times(state, button, i);
+        if (pair_wise_any_greater_than(new_state, desired_state))
           continue;
 
-        let new_state_key = state_to_key(new_state);
-        let new_state_count = dict[new_state_key];
+        if (button_index == c.buttons.length - 1)
+          if (pair_wise_equal(new_state, desired_state))
+            return i;
 
-        if (new_state_count == undefined || new_state_count > state_count + 1) {
-          dict[new_state_key] = state_count + 1;
-          console.log(`desired: ${desired_state_key}, current: ${new_state_key}, count: ${state_count + 1}`);
-
-          if (new_state_key == desired_state_key)
-            console.log(`Found: ${state_count + 1}`);
-
-          let desired_state_count = dict[desired_state_key];
-          if (desired_state_count != undefined && calc_min_distance(new_state, c.joltage) > desired_state_count)
-            continue;
-
-          if (!queue_includes(new_state_key))
-            queue_push(state_count + 1, new_state_key, new_state);
-        }
+        let min = await calc_min(desired_state, new_state, button_index + 1);
+        if (min)
+          return min + i;
       }
+
+      function max_presses(button: number[], desired_state: number[]): number {
+        return Math.min(...button.map(b => desired_state[b]!))
+      }
+
+      function divide(state: number[], d: number): number[] {
+        return state.map(x => x / d);
+      }
+
+      function calculate_remainer(state: number[]): [number[], number[]] {
+        const remainers = state.map(x => x % 2);
+        const wholes = state.map((x, i) => x - remainers[i]!);
+        return [wholes, remainers];
+      }
+
     }
 
-    return dict[desired_state_key];
+  }
 
-    function queue_length() {
-      let count = 0;
-      for (const q of queue)
-        count += q?.length || 0;
+  function pair_wise_equal(current_state: number[], desired_state: number[]) {
+    for (let i in current_state)
+      if (current_state[i] != desired_state[i])
+        return false;
 
-      return count;
-    }
-
-    function queue_pop() {
-      for(const q of queue)
-      //for (let i = queue.length; i >= 0; i--) {
-        //let q = queue[i];
-        if (q && q.length > 0)
-          return q.pop();
-      //}
-    }
-
-    function queue_push(count: number, state_key: string, new_state: number[]) {
-      let distance = calc_total_distance(new_state, c.joltage);
-      queue[distance] ??= [];
-      queue[distance].push(state_key);
-    }
-
-    function queue_includes(state_key: string) {
-      for (const q of queue)
-        if (q != undefined && q.includes(state_key))
-          return true;
-    }
+    return true;
   }
 
   function calc_total_distance(current_state: number[], desired_state: number[]) {
@@ -266,6 +241,13 @@ async function part2() {
 
   function state_key_to_state(state_key: string): number[] {
     return state_key.split(',').map(s => parseInt(s));
+  }
+
+  function press_button_times(state: number[], button: number[], times: number) {
+    let new_state = [...state];
+    for (let j of button)
+      new_state[j]! += times;
+    return new_state;
   }
 
   function press_button(state: number[], button: number[]) {
@@ -314,7 +296,7 @@ async function part2() {
   }
 
   const use_workers = false;
-  const input = fs.readFileSync('./src/day-10.input', 'utf8');
+  const input = fs.readFileSync('./src/day-10.input.debug', 'utf8');
   const manual = input
     .split('\n')
     .filter(l => l)
@@ -324,14 +306,15 @@ async function part2() {
     let total_count = 0;
     for (const configuration of manual) {
       let start = Date.now();
-      let count = calc_min_button_clicks(configuration);
+      let count = await calc_min_button_clicks(configuration);
+      if (!count)
+        throw 'Failed to find the count';
+      total_count += count;
       let time = (Date.now() - start) / 1000;
       console.log(`${print_configuration(configuration)} = ${count}          took ${time}s`);
     }
     console.log(`Part 2: ${total_count}`);
-  }
-
-  else {
+  } else {
     if (isMainThread) {
       const worker_threads = 6;
       let total_count = 0;
@@ -363,7 +346,7 @@ async function part2() {
 
       console.log(`Part 2: ${total_count}`);
     } else {
-      let count = calc_min_button_clicks(workerData.configuration);
+      let count = await calc_min_button_clicks(workerData.configuration);
       parentPort!.postMessage(count);
     }
   }
